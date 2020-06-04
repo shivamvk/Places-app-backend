@@ -20,7 +20,8 @@ router.patch(
   "/:placeId",
   [
     check("title").not().isEmpty(), 
-    check("description").isLength({ min: 5 })
+    check("description").isLength({ min: 5 }),
+    check("image").not().isEmpty()
   ],
   placesController.updatePlace
 );
