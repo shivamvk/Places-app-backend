@@ -1,0 +1,8 @@
+{
+  "env": {
+    "DB_USER": "shivamvk",
+    "DB_PASSWORD": "8KWPjShbAIB5WmUw",
+    "DB_NAME": "placesapp",
+    "JWT_KEY": "secret_key"
+  }
+}

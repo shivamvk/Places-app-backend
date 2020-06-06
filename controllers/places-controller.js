@@ -47,7 +47,7 @@ const createPlace = async (req, res, next) => {
     console.log(errors);
     return next(new HttpError("Invalid inputs passed", 422));
   }
-  const { title, description, address, creator } = req.body;
+  const { title, description, address } = req.body;
   let coordinates = {
     lat: 4.125,
     lng: -99.45,
@@ -58,12 +58,12 @@ const createPlace = async (req, res, next) => {
     address,
     location: coordinates,
     image: req.file.path,
-    creator,
+    creator: req.userData.userId,
   });
 
   let user;
   try {
-    user = await User.findById(creator);
+    user = await User.findById(req.userData.userId);
   } catch (e) {
     const error = new HttpError(e.message, 500);
     return next(error);
@@ -109,7 +109,6 @@ const updatePlace = async (req, res, next) => {
   }
 
   console.log(place.creator + " " + req.userData.userId);
-
 
   if (place.creator.toString() !== req.userData.userId) {
     const error = new HttpError(
