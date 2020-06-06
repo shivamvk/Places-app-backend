@@ -22,20 +22,22 @@ const getPlaceById = async (req, res, next) => {
 
 const getPlacesByUserId = async (req, res, next) => {
   const userId = req.params.userId;
-  let places;
+  let userWithPlaces;
   try {
-    places = await Place.find({ creator: userId });
+    userWithPlaces = await User.findById(userId).populate("places");
   } catch (e) {
     const error = new HttpError(e.message, 500);
     return next(500);
   }
-  if (places.length === 0) {
+  if (userWithPlaces.places.length === 0) {
     return next(
       new HttpError("Could not find a place for provided user id.", 404)
     );
   }
   res.json({
-    places: places.map((place) => place.toObject({ getters: true })),
+    places: userWithPlaces.places.map((place) =>
+      place.toObject({ getters: true })
+    ),
   });
 };
 
@@ -43,9 +45,9 @@ const createPlace = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     console.log(errors);
-    throw new HttpError("Invalid inputs passed", 422);
+    return next(new HttpError("Invalid inputs passed", 422));
   }
-  const { title, description, address, image, creator } = req.body;
+  const { title, description, address, creator } = req.body;
   let coordinates = {
     lat: 4.125,
     lng: -99.45,
@@ -55,7 +57,7 @@ const createPlace = async (req, res, next) => {
     description,
     address,
     location: coordinates,
-    image: image,
+    image: req.file.path,
     creator,
   });
 
@@ -78,14 +80,14 @@ const createPlace = async (req, res, next) => {
     sess.startTransaction();
     await createdPlace.save({ session: sess });
     user.places.push(createdPlace);
-    await user.save({session: sess});
-    
+    await user.save({ session: sess });
+
     await sess.commitTransaction();
   } catch (e) {
     const error = new HttpError(e.message, 500);
     return next(error);
   }
-  res.status(201).json({ place: createdPlace });
+  res.status(201).json({ place: createdPlace.toObject({ getters: true }) });
 };
 
 const updatePlace = async (req, res, next) => {
@@ -95,7 +97,7 @@ const updatePlace = async (req, res, next) => {
     throw new HttpError("Invalid inputs passed", 422);
   }
   const placeId = req.params.placeId;
-  const { title, description, image } = req.body;
+  const { title, description } = req.body;
 
   let place;
 
@@ -106,9 +108,19 @@ const updatePlace = async (req, res, next) => {
     return next(error);
   }
 
+  console.log(place.creator + " " + req.userData.userId);
+
+
+  if (place.creator.toString() !== req.userData.userId) {
+    const error = new HttpError(
+      "You're not allowed to perform this action!",
+      401
+    );
+    return next(error);
+  }
+
   place.title = title;
   place.description = description;
-  place.image = image;
 
   try {
     await place.save();
@@ -124,13 +136,33 @@ const deletePlace = async (req, res, next) => {
   const placeId = req.params.placeId;
   let place;
   try {
-    place = await Place.findById(placeId);
+    place = await Place.findById(placeId).populate("creator");
   } catch (e) {
     const error = new HttpError(e.message, 500);
     return next(error);
   }
+  console.log(place.creator.id.toString() + " " + req.userData.userId);
+
+  if (place.creator.id.toString() !== req.userData.userId) {
+    const error = new HttpError(
+      "You're not allowed to perform this action!",
+      401
+    );
+    return next(error);
+  }
+
+  if (!place) {
+    const error = new HttpError("Could not find a place with provided id", 500);
+    return next(error);
+  }
+
   try {
-    place.remove();
+    const sess = await mongoose.startSession();
+    sess.startTransaction();
+    await place.remove({ session: sess });
+    place.creator.places.pull(place);
+    await place.creator.save({ session: sess });
+    await sess.commitTransaction();
   } catch (e) {
     const error = new HttpError(e.message, 500);
     return next(error);
